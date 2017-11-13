@@ -1,7 +1,7 @@
 {
   "name": "aws-iot-device-sdk",
   "description": "AWS IoT Node.js SDK porting for Ruff",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "author": [
     "Amazon Web Services",
     "Nanchao Inc."
@@ -29,9 +29,7 @@
   ],
   "ruff": {
     "dependencies": {
-      "mqtt": "0.1.2",
-      "minimist": "npm:1.2.0",
-      "crypto-js": "npm:3.1.6"
+      "mqtt": "0.1.2"
     }
   }
 }

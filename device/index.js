@@ -19,7 +19,6 @@ var inherits = require('util').inherits;
 
 //npm deps
 var mqtt = require('mqtt');
-var crypto = require('crypto-js');
 
 //app deps
 var exceptions = require('./lib/exceptions');
@@ -54,110 +53,6 @@ function getDateTimeString() {
 
 function getDateString(dateTimeString) {
    return dateTimeString.substring(0, dateTimeString.indexOf('T'));
-}
-
-function getSignatureKey(key, dateStamp, regionName, serviceName) {
-   var kDate = crypto.HmacSHA256(dateStamp, 'AWS4' + key, {
-      asBytes: true
-   });
-   var kRegion = crypto.HmacSHA256(regionName, kDate, {
-      asBytes: true
-   });
-   var kService = crypto.HmacSHA256(serviceName, kRegion, {
-      asBytes: true
-   });
-   var kSigning = crypto.HmacSHA256('aws4_request', kService, {
-      asBytes: true
-   });
-   return kSigning;
-}
-
-function signUrl(method, scheme, hostname, path, queryParams, accessId, secretKey,
-   region, serviceName, payload, today, now, debug, awsSTSToken) {
-
-   var signedHeaders = 'host';
-
-   var canonicalHeaders = 'host:' + hostname.toLowerCase() + '\n';
-
-   var canonicalRequest = method + '\n' + // method
-      path + '\n' + // path
-      queryParams + '\n' + // query params
-      canonicalHeaders + // headers
-      '\n' + // required
-      signedHeaders + '\n' + // signed header list
-      crypto.SHA256(payload, {
-         asBytes: true
-      }); // hash of payload (empty string)
-
-   if (debug === true) {
-      console.log('canonical request: ' + canonicalRequest + '\n');
-   }
-
-   var hashedCanonicalRequest = crypto.SHA256(canonicalRequest, {
-      asBytes: true
-   });
-
-   if (debug === true) {
-      console.log('hashed canonical request: ' + hashedCanonicalRequest + '\n');
-   }
-
-   var stringToSign = 'AWS4-HMAC-SHA256\n' +
-      now + '\n' +
-      today + '/' + region + '/' + serviceName + '/aws4_request\n' +
-      hashedCanonicalRequest;
-
-   if (debug === true) {
-      console.log('string to sign: ' + stringToSign + '\n');
-   }
-
-   var signingKey = getSignatureKey(secretKey, today, region, serviceName);
-
-   if (debug === true) {
-      console.log('signing key: ' + signingKey + '\n');
-   }
-
-   var signature = crypto.HmacSHA256(stringToSign, signingKey, {
-      asBytes: true
-   });
-
-   if (debug === true) {
-      console.log('signature: ' + signature + '\n');
-   }
-
-   var finalParams = queryParams + '&X-Amz-Signature=' + signature;
-
-   if (!isUndefined(awsSTSToken)) {
-      finalParams += '&X-Amz-Security-Token=' + encodeURIComponent(awsSTSToken);
-   }
-
-   var url = scheme + hostname + path + '?' + finalParams;
-
-   if (debug === true) {
-      console.log('url: ' + url + '\n');
-   }
-
-   return url;
-}
-
-function prepareWebSocketUrl(options, awsAccessId, awsSecretKey, awsSTSToken) {
-   var now = getDateTimeString();
-   var today = getDateString(now);
-   var path = '/mqtt';
-   var awsServiceName = 'iotdevicegateway';
-   var queryParams = 'X-Amz-Algorithm=AWS4-HMAC-SHA256' +
-      '&X-Amz-Credential=' + awsAccessId + '%2F' + today + '%2F' + options.region + '%2F' + awsServiceName + '%2Faws4_request' +
-      '&X-Amz-Date=' + now +
-      '&X-Amz-SignedHeaders=host';
-   var hostName = options.host;
-
-   // Include the port number in the hostname if it's not 
-   // the standard wss port (443).
-   //
-   if (!isUndefined(options.port) && options.port !== 443) {
-      hostName = options.host + ':' + options.port;
-   }
-   return signUrl('GET', 'wss://', hostName, path, queryParams,
-      awsAccessId, awsSecretKey, options.region, awsServiceName, '', today, now, options.debug, awsSTSToken);
 }
 
 function arrayEach(array, iterFunction) {
@@ -414,72 +309,6 @@ function DeviceClient(options) {
 
       //read and map certificates
       tlsReader(options);
-   } else if (options.protocol === 'wss') {
-      //
-      // AWS access id and secret key 
-      // It first check Input options and Environment variables 
-      // If that not available, it will try to load credentials from default credential file
-      if (!isUndefined(options.accessKeyId)) {
-         awsAccessId = options.accessKeyId;
-      } else {
-         awsAccessId = process.env.AWS_ACCESS_KEY_ID;
-      }
-      if (!isUndefined(options.secretKey)) {
-         awsSecretKey = options.secretKey;
-      } else {
-         awsSecretKey = process.env.AWS_SECRET_ACCESS_KEY;
-      }
-      if (!isUndefined(options.sessionToken)) {
-         awsSTSToken = options.sessionToken;
-      } else {
-         awsSTSToken = process.env.AWS_SESSION_TOKEN;
-      }
-      if (isUndefined(awsAccessId) || isUndefined(awsSecretKey)) {
-         var filename;
-         try {
-            if(!isUndefined(options.filename)) {
-               filename = options.filename;
-            } else {
-               filename =  _loadDefaultFilename();
-            }
-            var user_profile = options.profile || process.env.AWS_PROFILE || 'default';
-            var creds = getCredentials(fs.readFileSync(filename, 'utf-8'));
-            var profile = creds[user_profile];
-            awsAccessId = profile.aws_access_key_id;
-            awsSecretKey = profile.aws_secret_access_key;
-            awsSTSToken = profile.aws_session_token;
-            } catch (e) {
-               console.log(e);
-               console.log("Failed to read credentials from " + filename);
-            }
-      }
-      if (!isUndefined(options.host)) {
-         var pattern =/[a-zA-Z0-9]+\.iot\.([a-z]+-[a-z]+-[0-9]+)\.amazonaws\..+/;
-         var region = pattern.exec(options.host);
-         if (region === null) {
-            console.log('Host endpoint is not valid');
-            throw new Error(exceptions.INVALID_CONNECT_OPTIONS);
-         } else {
-            options.region = region[1];
-         }
-      }
-      // AWS Access Key ID and AWS Secret Key must be defined
-      if (isUndefined(awsAccessId) || (isUndefined(awsSecretKey))) {
-         console.log('To connect via WebSocket/SigV4, AWS Access Key ID and AWS Secret Key must be passed either in options or as environment variables; see README.md');
-         throw new Error(exceptions.INVALID_CONNECT_OPTIONS);
-      }
-      // set port, do not override existing definitions if available
-      if (isUndefined(options.port)) {
-         options.port = 443;
-      }
-      // check websocketOptions and ensure that the protocol is defined
-      if (isUndefined(options.websocketOptions)) {
-         options.websocketOptions = {
-            protocol: 'mqttv3.1'
-         };
-      } else {
-         options.websocketOptions.protocol = 'mqttv3.1';
-      }
    }
 
    if ((!isUndefined(options)) && (options.debug === true)) {
@@ -490,7 +319,6 @@ function DeviceClient(options) {
 
    var protocols = {};
    protocols.mqtts = require('./lib/tls');
-//   protocols.wss = require('./lib/ws');
 
    function _loadDefaultFilename() {
       var home = process.env.HOME ||
@@ -556,24 +384,6 @@ function DeviceClient(options) {
    }
 
    function _wrapper(client) {
-      if (options.protocol === 'wss') {
-         var url;
-         //
-         // If the access id and secret key are available, prepare the URL. 
-         // Otherwise, set the url to an invalid value.
-         //
-         if (awsAccessId === '' || awsSecretKey === '') {
-            url = 'wss://no-credentials-available';
-         } else {
-            url = prepareWebSocketUrl(options, awsAccessId, awsSecretKey, awsSTSToken);
-         }
-
-         if (options.debug === true) {
-            console.log('using websockets, will connect to \'' + url + '\'...');
-         }
-
-         options.url = url;
-      }
       return protocols[options.protocol](client, options);
    }
 
@@ -850,8 +660,3 @@ inherits(DeviceClient, events.EventEmitter);
 
 module.exports = DeviceClient;
 module.exports.DeviceClient = DeviceClient;
-
-//
-// Exported for unit testing only
-//
-module.exports.prepareWebSocketUrl = prepareWebSocketUrl;
