@@ -490,7 +490,7 @@ function DeviceClient(options) {
 
    var protocols = {};
    protocols.mqtts = require('./lib/tls');
-   protocols.wss = require('./lib/ws');
+//   protocols.wss = require('./lib/ws');
 
    function _loadDefaultFilename() {
       var home = process.env.HOME ||

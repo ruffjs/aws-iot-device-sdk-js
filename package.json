@@ -1,7 +1,7 @@
 {
   "name": "aws-iot-device-sdk",
-  "description": "AWS IoT Node.js SDK for Embedded Devices",
-  "version": "2.1.0",
+  "description": "AWS IoT Node.js SDK porting for Ruff",
+  "version": "0.0.1",
   "author": {
     "name": "Amazon Web Services",
     "email": "",
@@ -27,11 +27,12 @@
     "iot",
     "mqtt"
   ],
-  "dependencies": {
-    "mqtt": "2.13.0",
-    "minimist": "1.2.0",
-    "websocket-stream": "^3.3.3",
-    "crypto-js": "3.1.6"
+  "ruff": {
+    "dependencies": {
+      "mqtt": "0.1.2",
+      "minimist": "1.2.0",
+      "crypto-js": "3.1.6"
+    }
   },
   "devDependencies": {
     "gulp": "^3.9.0",
